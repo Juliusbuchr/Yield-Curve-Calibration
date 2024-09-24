@@ -57,38 +57,3 @@ plots = [p1,p2]
 labels = [item.get_label() for item in plots]
 ax.legend(plots,labels,loc="lower right",fontsize = 6)
 # plt.show()
-
-# Not sure if this match the criterie of a well behaved yield curve... to me it looks okay I guess?
-
-# (b) compute the price, yield to maturity, duration and convexities of the bond 
-
-# I guess we should use our newly calibrated yield curve. Start by defining the bonds cash flow vector
-
-C = np.ones(20)*0.5*0.05*100
-C[19:] = C[19:] + 100
-
-cashflow_times = np.array([i*0.5 for i in range(1,21)])
-p_bond = np.array(FID.for_values_in_list_find_value_return_value(cashflow_times, T_inter, p_inter))
-
-npv_cashflow = C*p_bond
-price = sum(npv_cashflow)
-
-print(f'Price of the bond is: {price}')
-
-# calculating yield to maturity
-ytm = FID.ytm(price, cashflow_times, C)
-print(f'Yield to maturity is: {ytm}')
-
-# calculating the macauley duration
-mac_dur = FID.macauley_duration(price, cashflow_times, C, ytm)
-print(f'Macauley duration is: {mac_dur}')
-
-# calculating the modified duration 
-mod_dur = FID.modified_duration(price, cashflow_times, C, ytm)
-print(f'The modified duration is {mod_dur}')
-
-# calculating convexity of the bond
-convexity = FID.convexity(price, cashflow_times, C, ytm)
-print(f'Convexity is {convexity}')
-
-
