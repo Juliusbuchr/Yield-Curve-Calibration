@@ -1,0 +1,94 @@
+
+import FIDLIB as FID
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# (a) calibrating continuous term structure of ZCB spot rates, plotting spot and forward rates.
+
+# the function takes three market inputs, namely EURIBOR, FRA and swaps and thus we write up the market as follows: 
+
+EURIBOR_fixing = [{"id": 0,"instrument": "libor","maturity": 1/2, "rate":0.00967}]
+fra_market = [{"id": 1,"instrument": "fra","exercise": 1/12,"maturity": 7/12, "rate": 0.00980},
+{"id": 2,"instrument": "fra","exercise": 2/12,"maturity": 8/12, "rate": 0.01043},
+{"id": 3,"instrument": "fra","exercise": 3/12,"maturity": 9/12, "rate": 0.01130},
+{"id": 4,"instrument": "fra","exercise": 4/12,"maturity": 10/12, "rate": 0.01217},
+{"id": 5,"instrument": "fra","exercise": 5/12,"maturity": 11/12, "rate": 0.01317},
+{"id": 6,"instrument": "fra","exercise": 6/12,"maturity": 12/12, "rate": 0.01399},
+{"id": 7,"instrument": "fra","exercise": 7/12,"maturity": 13/12, "rate": 0.01478},
+{"id": 8,"instrument": "fra","exercise": 8/12,"maturity": 14/12, "rate": 0.01560},
+{"id": 9,"instrument": "fra","exercise": 9/12,"maturity": 15/12, "rate": 0.01637}]
+swap_market = [{"id": 10,"instrument": "swap","maturity": 2, "rate": 0.01652, "float_freq": "semiannual", "fixed_freq": "annual","indices": []},
+{"id": 11,"instrument": "swap","maturity": 3, "rate": 0.02019, "float_freq": "semiannual", "fixed_freq": "annual","indices": []},
+{"id": 12,"instrument": "swap","maturity": 4, "rate": 0.02319, "float_freq": "semiannual", "fixed_freq": "annual","indices": []},
+{"id": 13,"instrument": "swap","maturity": 5, "rate": 0.02577, "float_freq": "semiannual", "fixed_freq": "annual","indices": []},
+{"id": 14,"instrument": "swap","maturity": 7, "rate": 0.02995, "float_freq": "semiannual", "fixed_freq": "annual","indices": []},
+{"id": 15,"instrument": "swap","maturity": 10, "rate": 0.03395, "float_freq": "semiannual", "fixed_freq": "annual","indices": []},
+{"id": 16,"instrument": "swap","maturity": 15, "rate": 0.03753, "float_freq": "semiannual", "fixed_freq": "annual","indices": []},
+{"id": 17,"instrument": "swap","maturity": 20, "rate": 0.03873, "float_freq": "semiannual", "fixed_freq": "annual","indices": []},
+{"id": 18,"instrument": "swap","maturity": 30, "rate": 0.03975, "float_freq": "semiannual", "fixed_freq": "annual","indices": []}]
+data = EURIBOR_fixing + fra_market + swap_market
+
+# We now call the functions from the FID library to fit the curve and interpolate between the knot points 
+
+interpolation_options = {"method":"hermite","degree":2}
+T_fit, R_fit = FID.zcb_curve_fit(data,interpolation_options = interpolation_options)
+p_inter, R_inter, f_inter, T_inter = FID.zcb_curve_interpolate(T_fit,R_fit,interpolation_options = interpolation_options,resolution = 1)
+
+# Visualize the spot- and forward rates together after interpolation. Note discontinuous times of the graph. 
+
+fig = plt.figure(constrained_layout=False, dpi = 300, figsize = (5,3))
+fig.suptitle(f"Calibrated zero coupon spot rates", fontsize = 9)
+gs = fig.add_gridspec(nrows=1,ncols=1,left=0.12,bottom=0.2,right=0.88,top=0.90,wspace=0,hspace=0)
+ax = fig.add_subplot(gs[0,0])
+xticks = [0,1,2,3,4,5,7,10,15,20,30]
+ax.set_xticks(xticks)
+ax.set_xticklabels(xticks,fontsize = 6)
+ax.set_xlim([xticks[0]+-0.2,xticks[-1]+0.2])
+plt.xlabel(f"Maturity",fontsize = 7)
+ax.set_yticks([0,0.01,0.02,0.03,0.04,0.05,0.06])
+ax.set_yticklabels([0,0.01,0.02,0.03,0.04,0.05,0.06],fontsize = 6)
+ax.set_ylim([0,0.0625])
+ax.set_ylabel(f"Spot and instantaneous forward rates",fontsize = 7)
+plt.grid(axis = 'y', which='major', color = (0.7,0.7,0.7,0), linestyle='--')
+p1 = ax.scatter(T_inter[1:], R_inter[1:], s = 1, color = 'black', marker = ".",label="Spot rates")
+p2 = ax.scatter(T_inter[1:], f_inter[1:], s = 1, color = 'red', marker = ".",label="forward rates")
+plots = [p1,p2]
+labels = [item.get_label() for item in plots]
+ax.legend(plots,labels,loc="lower right",fontsize = 6)
+# plt.show()
+
+# Not sure if this match the criterie of a well behaved yield curve... to me it looks okay I guess?
+
+# (b) compute the price, yield to maturity, duration and convexities of the bond 
+
+# I guess we should use our newly calibrated yield curve. Start by defining the bonds cash flow vector
+
+C = np.ones(20)*0.5*0.05*100
+C[19:] = C[19:] + 100
+
+cashflow_times = np.array([i*0.5 for i in range(1,21)])
+p_bond = np.array(FID.for_values_in_list_find_value_return_value(cashflow_times, T_inter, p_inter))
+
+npv_cashflow = C*p_bond
+price = sum(npv_cashflow)
+
+print(f'Price of the bond is: {price}')
+
+# calculating yield to maturity
+ytm = FID.ytm(price, cashflow_times, C)
+print(f'Yield to maturity is: {ytm}')
+
+# calculating the macauley duration
+mac_dur = FID.macauley_duration(price, cashflow_times, C, ytm)
+print(f'Macauley duration is: {mac_dur}')
+
+# calculating the modified duration 
+mod_dur = FID.modified_duration(price, cashflow_times, C, ytm)
+print(f'The modified duration is {mod_dur}')
+
+# calculating convexity of the bond
+convexity = FID.convexity(price, cashflow_times, C, ytm)
+print(f'Convexity is {convexity}')
+
+
